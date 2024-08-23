@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"golang.design/x/clipboard"
 	"net"
+
+	"golang.design/x/clipboard"
 )
 
 var clientLog *Log
@@ -17,7 +18,7 @@ func runClient() {
 	// init msg Handler
 	initMsgHandler()
 	// connect server
-	if config.Role == "server" {
+	if config.Role == RTServer {
 		config.Host = "127.0.0.1"
 	}
 	conn, err := net.Dial("tcp", config.Host+":"+config.Port)
@@ -25,7 +26,7 @@ func runClient() {
 		clientLog.Log("connect server tcp error: %s", err.Error())
 		panic(err)
 	}
-	tcp := NewTcp(conn, "client", clientLog)
+	tcp := NewTcp(conn, RTClient, clientLog)
 	// send password
 	err = tcp.Send(&TcpMsg{
 		Name:    "",

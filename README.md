@@ -28,3 +28,6 @@ tips: do not run client when you pc has been run server
 ## todo
 1、make the code perfect  
 2、support copy img
+
+## todo-lanxin
+1、sync numslock and capslock

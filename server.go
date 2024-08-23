@@ -93,6 +93,7 @@ func listenMsg(tcp *Tcp) {
 	lock.Unlock()
 }
 
+// 将收到的消息转发给除消息发送者外的所有tcp-client
 func notifyMsg(id string, content *TcpMsg) {
 	for _, tcp := range connList {
 		tcp := tcp
