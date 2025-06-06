@@ -1,25 +1,9 @@
 # shear-plate-sharing
+在原作者的基础上使用AI修复了bug：复制文本内容过多（实测超800行代码文本）就会崩溃；
 
 ## What is that?
 when you use different os in different computer,you may need share shear plate,
 so this program is the answer.
-
-## Requirements
-
-### For Linux Users
-You need to install X11 development libraries:
-```bash
-# Ubuntu/Debian
-sudo apt-get install -y libx11-dev
-
-# CentOS/RHEL
-sudo yum install -y libX11-devel
-```
-
-It's recommended to build the program directly on Linux:
-```bash
-go build -o plate
-```
 
 ## How to use?
 ### 1、edit `config.yml`
