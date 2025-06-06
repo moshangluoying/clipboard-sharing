@@ -3,14 +3,13 @@ package main
 import (
 	"context"
 	"net"
-
-	"golang.design/x/clipboard"
 )
 
 var clientLog *Log
 var lastContent []byte
 var msgHandler map[ContentType]func(msg *TcpMsg) error
 var isServer bool
+var clipboardManager *ClipboardManager
 
 func runClient() {
 	// init log
@@ -36,22 +35,22 @@ func runClient() {
 	if err != nil {
 		clientLog.Log("send password error: %s", err.Error())
 		panic(err)
-	}
-	// clipboard
-	err = clipboard.Init()
+	}	// clipboard
+	clipboardManager = NewClipboardManager()
+	err = clipboardManager.Init()
 	if err != nil {
 		clientLog.Log("init clipboard error: %s", err.Error())
 		panic(err)
 	}
 
-	clipboardCh := clipboard.Watch(context.Background(), clipboard.FmtText)
+	clipboardCh := clipboardManager.Watch(context.Background())
 	msgCh := tcp.Watch()
 	clipboardHandler(tcp, clipboardCh, msgCh)
 }
 
 func clipboardHandler(tcp *Tcp, clipboardCh <-chan []byte, msgCh <-chan *TcpMsg) {
 	defer tcp.Close()
-	lastContent = clipboard.Read(clipboard.FmtText)
+	lastContent = clipboardManager.Read()
 	for {
 		var content []byte
 		select {
@@ -91,7 +90,10 @@ func handlerText(msg *TcpMsg) error {
 	if string(msg.Content) == string(lastContent) {
 		return nil
 	}
-	clipboard.Write(clipboard.FmtText, msg.Content)
+	err := clipboardManager.Write(msg.Content)
+	if err != nil {
+		return err
+	}
 	lastContent = msg.Content
 	return nil
 }

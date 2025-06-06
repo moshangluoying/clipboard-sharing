@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"github.com/google/uuid"
 	"net"
 )
@@ -79,6 +78,19 @@ func (t *Tcp) Send(msg *TcpMsg) error {
 	return t.send(msg.Name, msg.Content, msg.Type)
 }
 
+// writeFull 确保完整发送指定数量的字节
+func (t *Tcp) writeFull(data []byte) error {
+	bytesWritten := 0
+	for bytesWritten < len(data) {
+		n, err := t.conn.Write(data[bytesWritten:])
+		if err != nil {
+			return err
+		}
+		bytesWritten += n
+	}
+	return nil
+}
+
 func (t *Tcp) send(name string, contentBytes []byte, contentType ContentType) error {
 	msg := &TcpMsg{
 		Name:    name,
@@ -92,45 +104,53 @@ func (t *Tcp) send(name string, contentBytes []byte, contentType ContentType) er
 
 	contentLen := len(msgBytes)
 	contentLenBytes := Int64ToBytes(int64(contentLen))
-	binLen, err := t.conn.Write(contentLenBytes)
+
+	// 发送长度信息
+	err = t.writeFull(contentLenBytes)
 	if err != nil {
 		return err
 	}
-	if binLen != headerLen {
-		return errors.New("msg len not match")
-	}
-	binLen, err = t.conn.Write(msgBytes)
+
+	// 发送消息内容
+	err = t.writeFull(msgBytes)
 	if err != nil {
 		return err
 	}
-	if binLen != contentLen {
-		return errors.New("content len not match")
-	}
+
 	msg.To = t.conn.RemoteAddr().String()
 	t.log.LogSendMsg(msg)
+	return nil
+}
+
+// readFull 确保完整读取指定数量的字节
+func (t *Tcp) readFull(buf []byte) error {
+	bytesRead := 0
+	for bytesRead < len(buf) {
+		n, err := t.conn.Read(buf[bytesRead:])
+		if err != nil {
+			return err
+		}
+		bytesRead += n
+	}
 	return nil
 }
 
 func (t *Tcp) read() (*TcpMsg, error) {
 	// read content len
 	lenInfoBytes := make([]byte, headerLen)
-	binLen, err := t.conn.Read(lenInfoBytes)
+	err := t.readFull(lenInfoBytes)
 	if err != nil {
 		return nil, err
 	}
-	if binLen != headerLen {
-		return nil, errors.New("msg len not match")
-	}
+
 	msgLen := BytesToInt64(lenInfoBytes)
 	// read content
 	msgBytes := make([]byte, msgLen)
-	binLen, err = t.conn.Read(msgBytes)
+	err = t.readFull(msgBytes)
 	if err != nil {
 		return nil, err
 	}
-	if int64(binLen) != msgLen {
-		return nil, errors.New("content len not match")
-	}
+
 	msg := &TcpMsg{}
 	err = json.Unmarshal(msgBytes, msg)
 	if err != nil {
