@@ -5,10 +5,11 @@ package main
 
 import (
 	"context"
+
 	"golang.design/x/clipboard"
 )
 
-type ClipboardManager struct {}
+type ClipboardManager struct{}
 
 func NewClipboardManager() *ClipboardManager {
 	return &ClipboardManager{}

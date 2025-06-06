@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"net"
+	"encoding/json"
 )
 
 var clientLog *Log
@@ -10,6 +11,8 @@ var lastContent []byte
 var msgHandler map[ContentType]func(msg *TcpMsg) error
 var isServer bool
 var clipboardManager *ClipboardManager
+var keyboardManager *KeyboardManager
+var lastKeyboardState *KeyboardState
 
 func runClient() {
 	// init log
@@ -35,7 +38,9 @@ func runClient() {
 	if err != nil {
 		clientLog.Log("send password error: %s", err.Error())
 		panic(err)
-	}	// clipboard
+	}
+
+	// clipboard
 	clipboardManager = NewClipboardManager()
 	err = clipboardManager.Init()
 	if err != nil {
@@ -43,18 +48,27 @@ func runClient() {
 		panic(err)
 	}
 
+	// keyboard
+	keyboardManager = NewKeyboardManager()
+	initialState, err := keyboardManager.GetState()
+	if err != nil {
+		clientLog.Log("init keyboard error: %s", err.Error())
+		panic(err)
+	}
+	lastKeyboardState = initialState
+
 	clipboardCh := clipboardManager.Watch(context.Background())
+	keyboardCh := keyboardManager.Watch(context.Background())
 	msgCh := tcp.Watch()
-	clipboardHandler(tcp, clipboardCh, msgCh)
+	handler(tcp, clipboardCh, keyboardCh, msgCh)
 }
 
-func clipboardHandler(tcp *Tcp, clipboardCh <-chan []byte, msgCh <-chan *TcpMsg) {
+func handler(tcp *Tcp, clipboardCh <-chan []byte, keyboardCh <-chan *KeyboardState, msgCh <-chan *TcpMsg) {
 	defer tcp.Close()
 	lastContent = clipboardManager.Read()
 	for {
-		var content []byte
 		select {
-		case content = <-clipboardCh:
+		case content := <-clipboardCh:
 			if string(content) == string(lastContent) {
 				continue
 			}
@@ -67,6 +81,27 @@ func clipboardHandler(tcp *Tcp, clipboardCh <-chan []byte, msgCh <-chan *TcpMsg)
 				panic(err)
 			}
 			lastContent = content
+
+		case state := <-keyboardCh:
+			if state == nil || (state.NumLock == lastKeyboardState.NumLock && 
+			   state.CapsLock == lastKeyboardState.CapsLock) {
+				continue
+			}
+			stateBytes, err := json.Marshal(state)
+			if err != nil {
+				clientLog.Log("marshal keyboard state error: %s", err.Error())
+				continue
+			}
+			err = tcp.Send(&TcpMsg{
+				Content: stateBytes,
+				Type:    CTKeyboardState,
+			})
+			if err != nil {
+				clientLog.Log("send keyboard state error: %s", err.Error())
+				continue
+			}
+			lastKeyboardState = state
+
 		case msg := <-msgCh:
 			f, ok := msgHandler[msg.Type]
 			if !ok {
@@ -84,6 +119,7 @@ func clipboardHandler(tcp *Tcp, clipboardCh <-chan []byte, msgCh <-chan *TcpMsg)
 func initMsgHandler() {
 	msgHandler = make(map[ContentType]func(msg *TcpMsg) error)
 	msgHandler[CTText] = handlerText
+	msgHandler[CTKeyboardState] = handlerKeyboardState
 }
 
 func handlerText(msg *TcpMsg) error {
@@ -95,5 +131,25 @@ func handlerText(msg *TcpMsg) error {
 		return err
 	}
 	lastContent = msg.Content
+	return nil
+}
+
+func handlerKeyboardState(msg *TcpMsg) error {
+	var state KeyboardState
+	if err := json.Unmarshal(msg.Content, &state); err != nil {
+		return err
+	}
+
+	if lastKeyboardState != nil && 
+	   state.NumLock == lastKeyboardState.NumLock && 
+	   state.CapsLock == lastKeyboardState.CapsLock {
+		return nil
+	}
+
+	err := keyboardManager.SetState(&state)
+	if err != nil {
+		return err
+	}
+	lastKeyboardState = &state
 	return nil
 }

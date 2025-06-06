@@ -2,8 +2,9 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/google/uuid"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 const headerLen int = 8
@@ -17,6 +18,7 @@ const (
 	CTText
 	CTImg
 	CTFile
+	CTKeyboardState
 )
 
 type SystemContent struct {
