@@ -21,9 +21,43 @@ Password: xxx
 ```
 tips: do not run client when you pc has been run server
 
-### 2、run
+### 2、build and run
+#### Windows
+Build options:
+```powershell
+# Build with console window (default)
+.\build.ps1
+
+# Build without console window
+.\build.ps1 -NoConsole
+
+# Build release version with console window
+.\build.ps1 -Release
+
+# Build release version without console window
+.\build.ps1 -Release -NoConsole
+```
+
+Run the program as administrator (required for keyboard state synchronization):
+```powershell
+# Right-click plate.exe and select "Run as administrator"
+```
+
+#### Linux
 ```shell
 ./plate
+```
+
+Note: On Linux systems, you need to install xdotool for keyboard state synchronization:
+```shell
+# Debian/Ubuntu
+sudo apt-get install xdotool
+
+# Fedora
+sudo dnf install xdotool
+
+# Arch Linux
+sudo pacman -S xdotool
 ```
 
 ## todo
