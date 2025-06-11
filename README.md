@@ -52,6 +52,7 @@ Note: On Linux systems, you need to install xdotool for keyboard state synchroni
 ```shell
 # Debian/Ubuntu
 sudo apt-get install xdotool
+warning: ubuntu16实测无法安装xdotool
 
 # Fedora
 sudo dnf install xdotool

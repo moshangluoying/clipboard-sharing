@@ -5,16 +5,15 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"time"
-	"unsafe"
+	"log"
 	"syscall"
+	"time"
 )
 
 var (
-	user32                = syscall.NewLazyDLL("user32.dll")
-	procGetKeyboardState = user32.NewProc("GetKeyboardState")
-	procKeyboardEvent    = user32.NewProc("keybd_event")
+	user32            = syscall.NewLazyDLL("user32.dll")
+	procGetKeyState   = user32.NewProc("GetKeyState")
+	procKeyboardEvent = user32.NewProc("keybd_event")
 )
 
 const (
@@ -36,15 +35,14 @@ func NewKeyboardManager() *KeyboardManager {
 }
 
 func (k *KeyboardManager) GetState() (*KeyboardState, error) {
-	var keyState [256]byte
-	ret, _, _ := procGetKeyboardState.Call(uintptr(unsafe.Pointer(&keyState[0])))
-	if ret == 0 {
-		return nil, fmt.Errorf("get keyboard state failed")
-	}
+	// 获取键盘状态
+	numLockState, _, _ := procGetKeyState.Call(uintptr(VK_NUMLOCK))
+	capsLockState, _, _ := procGetKeyState.Call(uintptr(VK_CAPITAL))
 
+	// GetKeyState返回负值表示键被按下，最低位为1表示toggled state
 	return &KeyboardState{
-		NumLock:  keyState[VK_NUMLOCK]&1 == 1,
-		CapsLock: keyState[VK_CAPITAL]&1 == 1,
+		NumLock:  (numLockState & 1) != 0,  // 使用 != 0 代替 == 1 更准确
+		CapsLock: (capsLockState & 1) != 0,
 	}, nil
 }
 
@@ -94,21 +92,37 @@ func (k *KeyboardManager) Watch(ctx context.Context) <-chan *KeyboardState {
 	go func() {
 		defer close(ch)
 		var lastState *KeyboardState
-		ticker := time.NewTicker(100 * time.Millisecond)
+		ticker := time.NewTicker(20 * time.Millisecond) // 更高的检查频率
 		defer ticker.Stop()
 
+		var err error
+		lastState, err = k.GetState() // 初始化lastState
+		if err != nil {
+			log.Printf("Initial keyboard state error: %v", err)
+			return
+		}
+
+		log.Printf("Started keyboard state monitoring. Initial state: NumLock=%v, CapsLock=%v", 
+			lastState.NumLock, lastState.CapsLock)
+
 		for {
-			select {
-			case <-ctx.Done():
+			select {			case <-ctx.Done():
 				return
 			case <-ticker.C:
 				state, err := k.GetState()
 				if err != nil {
+					log.Printf("Error getting keyboard state: %v", err)
 					continue
 				}
+				
+				// 检测状态变化
 				if lastState == nil || 
 				   lastState.NumLock != state.NumLock || 
 				   lastState.CapsLock != state.CapsLock {
+					log.Printf("Keyboard state changed: NumLock: %v->%v, CapsLock: %v->%v",
+						lastState.NumLock, state.NumLock,
+						lastState.CapsLock, state.CapsLock)
+					
 					ch <- state
 					lastState = state
 				}

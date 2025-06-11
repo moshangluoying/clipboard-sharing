@@ -56,6 +56,8 @@ func runClient() {
 		panic(err)
 	}
 	lastKeyboardState = initialState
+	clientLog.Log("Initial keyboard state: NumLock=%v, CapsLock=%v", 
+		initialState.NumLock, initialState.CapsLock)
 
 	clipboardCh := clipboardManager.Watch(context.Background())
 	keyboardCh := keyboardManager.Watch(context.Background())
@@ -81,17 +83,27 @@ func handler(tcp *Tcp, clipboardCh <-chan []byte, keyboardCh <-chan *KeyboardSta
 				panic(err)
 			}
 			lastContent = content
-
 		case state := <-keyboardCh:
-			if state == nil || (state.NumLock == lastKeyboardState.NumLock && 
-			   state.CapsLock == lastKeyboardState.CapsLock) {
+			if state == nil {
+				clientLog.Log("Received nil keyboard state")
 				continue
 			}
+			
+			if state.NumLock == lastKeyboardState.NumLock && 
+			   state.CapsLock == lastKeyboardState.CapsLock {
+				continue
+			}
+
+			clientLog.Log("Keyboard state changed locally: NumLock=%v->%v, CapsLock=%v->%v",
+				lastKeyboardState.NumLock, state.NumLock,
+				lastKeyboardState.CapsLock, state.CapsLock)
+			
 			stateBytes, err := json.Marshal(state)
 			if err != nil {
 				clientLog.Log("marshal keyboard state error: %s", err.Error())
 				continue
 			}
+			
 			err = tcp.Send(&TcpMsg{
 				Content: stateBytes,
 				Type:    CTKeyboardState,
@@ -100,7 +112,9 @@ func handler(tcp *Tcp, clipboardCh <-chan []byte, keyboardCh <-chan *KeyboardSta
 				clientLog.Log("send keyboard state error: %s", err.Error())
 				continue
 			}
+			
 			lastKeyboardState = state
+			clientLog.Log("Keyboard state sent to server")
 
 		case msg := <-msgCh:
 			f, ok := msgHandler[msg.Type]
@@ -120,6 +134,7 @@ func initMsgHandler() {
 	msgHandler = make(map[ContentType]func(msg *TcpMsg) error)
 	msgHandler[CTText] = handlerText
 	msgHandler[CTKeyboardState] = handlerKeyboardState
+	clientLog.Log("Message handlers initialized")
 }
 
 func handlerText(msg *TcpMsg) error {
@@ -140,6 +155,9 @@ func handlerKeyboardState(msg *TcpMsg) error {
 		return err
 	}
 
+	clientLog.Log("Received keyboard state from server: NumLock=%v, CapsLock=%v",
+		state.NumLock, state.CapsLock)
+
 	if lastKeyboardState != nil && 
 	   state.NumLock == lastKeyboardState.NumLock && 
 	   state.CapsLock == lastKeyboardState.CapsLock {
@@ -148,8 +166,11 @@ func handlerKeyboardState(msg *TcpMsg) error {
 
 	err := keyboardManager.SetState(&state)
 	if err != nil {
+		clientLog.Log("Failed to set keyboard state: %v", err)
 		return err
 	}
+
 	lastKeyboardState = &state
+	clientLog.Log("Successfully applied keyboard state")
 	return nil
 }
